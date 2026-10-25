@@ -1,17 +1,16 @@
 # WindCast Command Centre
 
-WindCast UK ke wind generation forecast ko dekhne aur uske baare mein sawaal poochne ke liye ek responsive web app hai. Forecast Elexon BMRS ke public WINDFOR feed se aata hai.
+WindCast is a responsive dashboard for Great Britain wind generation forecasts. Forecast data comes from the public Elexon BMRS WINDFOR feed; observed wind generation comes from the FUELHH feed.
 
-## App ko kaise chalayein
+## Run the application locally
 
-### Zaroori cheezein
+### Requirements
 
-- Node.js ka current LTS version aur npm
-- Internet connection, taaki Elexon se live forecast aa sake
+- Node.js LTS and npm
+- Python 3.12 and pip
+- Internet access to reach Elexon BMRS for live forecast and actual data
 
-### Local development: backend aur frontend dono
-
-Pehle Django backend ko **Terminal 1** mein start karein:
+Start the Django backend in **Terminal 1**:
 
 ```powershell
 cd C:\reint_assigment_backend
@@ -23,7 +22,7 @@ python manage.py migrate
 python manage.py runserver 8000
 ```
 
-Uske baad frontend ko **Terminal 2** mein start karein:
+Start the Next.js frontend in **Terminal 2**:
 
 ```powershell
 cd C:\reint_assigment
@@ -32,7 +31,7 @@ $env:WINDCAST_BACKEND_URL = "http://localhost:8000"
 npm run dev
 ```
 
-Browser mein [http://localhost:3000](http://localhost:3000) kholein. Forecast aur assistant requests ab Next.js ke `/api/` proxy se Django API (`localhost:8000`) par jaati hain; Django Elexon BMRS provider ko call karta hai. Dono servers chalte rehne chahiye. Band karne ke liye har terminal mein `Ctrl+C` dabayein.
+Open [http://localhost:3000](http://localhost:3000). Keep both terminals running. The Next.js API routes proxy requests to Django, and Django fetches the live Elexon data. Stop either server with `Ctrl+C` in its terminal.
 
 ### Production build
 
@@ -42,85 +41,91 @@ npm run build
 npm run start
 ```
 
-`npm run start` ke baad site `http://localhost:3000` par khulegi. PWA install karne ke liye production build ko HTTPS ya localhost par kholkar browser menu se **Install WindCast** chunein.
+The production app runs at `http://localhost:3000`. To install the PWA, open the production app over HTTPS or localhost and select **Install WindCast** from the browser menu.
 
-## Screen-by-screen: kya dikhega
+## Screens and displayed data
 
 ### 1. Start screen
 
-WindCast logo aur **Continue** button dikhega. Button click karne par Welcome screen khulti hai. Is project mein Google sign-in configured nahi hai; Continue sirf app ka onboarding flow aage badhata hai.
+The WindCast logo and **Continue** button are shown. Continue opens the Welcome screen. Google sign-in is not configured; this button advances the demo onboarding flow.
 
 ### 2. Welcome screen
 
-Welcome screen app ka purpose aur Elexon data source batati hai. **Continue** click karne par Forecast dashboard khulta hai.
+This screen introduces WindCast and its Elexon data source. **Continue** opens the forecast dashboard.
 
 ### 3. Forecast dashboard
 
-- **Peak forecast:** agle UK calendar din ka sabse bada published forecast aur settlement period.
-- **Expected average:** Elexon ke available forecast periods ka average.
-- **Forecast coverage:** Elexon se aaye forecast periods ki ginti.
-- **Recommended buffer:** `—` jab tak procurement/reserve model configured na ho.
-- **Day-ahead prediction:** peak, average aur available data points; **Open full prediction** se sabhi returned forecast periods.
-- **Accuracy & reliability:** MAPE, MAE aur bias tabhi dikhaye ja sakte hain jab actual generation data connect ho. Abhi placeholders hain, fake scores nahi.
-- **Today → tomorrow:** latest forecast summary. Actual generation na hone par aaj ka actual `—` rahega.
-- **At a glance:** din ke paanch sabse bade forecast periods.
-- **WindCast Assistant:** neeche daahine chat button se chatbot kholein.
+- **Peak forecast:** the highest published forecast value for the next UK calendar day, with its time.
+- **Expected average:** the average of available Elexon forecast points for that day.
+- **Forecast coverage:** the number of forecast points returned by Elexon.
+- **Recommended buffer:** shown as `—` because a reserve/procurement model is not configured.
+- **Day-ahead prediction:** peak, average, and point count. **Open full prediction** lists all returned forecast points.
+- **Accuracy & reliability:** MAPE, MAE, and Bias are calculated by the backend from forecast points matched to observed FUELHH wind generation. Values appear after matching actual data is available. MAPE is a percentage; MAE and Bias are in MW. The matched-period count is shown below each value.
+- **Today → tomorrow:** Today actual is the average observed wind generation returned for today. Tomorrow guess is the next-day forecast average.
+- **At a glance:** displays up to five of the day's highest forecast points.
+- **WindCast Assistant:** open the chat with the button at the lower-right corner.
 
-Times UK settlement-period numbering se dikhte hain; daylight-saving change waale din period count 46 ya 50 ho sakta hai.
+Times use UK local time. Daylight-saving transitions may have 46 or 50 half-hour settlement periods.
 
-## Chatbot ka use
+## WindCast Assistant
 
-Chat kholkar din, peak, ya average ke baare mein sawaal likhein, phir send button dabayein. Examples:
+Open the chat and ask about a date, peak, or average forecast. For example:
 
-- `Kal ki windcast kya thi?`
-- `Tomorrow ka peak wind forecast kya hai?`
-- `Aaj ka average generation batao`
-- `Kal ka highest MW kitna tha?`
+- `What was yesterday's windcast?`
+- `What is tomorrow's peak wind forecast?`
+- `Tell me today's average generation`
+- `What was yesterday's highest MW?`
 
-`kal` ke saath `thi/tha` ho to chatbot pichhla UK din leta hai; warna default agla UK din hai. Answer Elexon ke latest revised forecast par based hai—yeh historical snapshot nahi hai ki us din pehle kaunsa forecast publish hua tha. Confidence, accuracy, aur reserve ke baare mein chatbot batayega ki woh model/data abhi connected nahi hai.
+The chatbot answers from the latest revised Elexon forecast. It does not recreate the exact forecast as originally published on a past date. Confidence, forecast accuracy, and reserve questions are not answered with invented estimates.
 
 ## API routes
 
 ### `GET /api/windcast?date=YYYY-MM-DD`
 
-Next.js proxy se Django `GET /api/v1/public/windcast/?date=YYYY-MM-DD` route tak jaata hai. Django Elexon WINDFOR se settlement date ka latest wind forecast mangta hai. `date` chhodne par agle UK calendar din ka data aata hai. Response mein `date`, `source`, `updatedAt`, `periods`, aur `summary` milte hain. Har period mein settlement-period number aur forecast MW hota hai. Data na mile to `periods` khaali aur `message` diya jata hai; provider error par API `502` return karti hai.
+The Next.js proxy calls Django `GET /api/v1/public/windcast/?date=YYYY-MM-DD`. Django returns the latest revised WINDFOR points for the requested UK date. If `date` is omitted, it defaults to tomorrow in UK time. The response includes `date`, `source`, `updatedAt`, `periods`, and `summary`. Each period includes its number, UK-local time, and forecast MW. If Elexon has not published data, `periods` is empty and a `message` is returned. Upstream errors return HTTP `502`.
+
+### `GET /api/performance?date=YYYY-MM-DD`
+
+The Next.js proxy calls Django `GET /api/v1/public/performance/?date=YYYY-MM-DD`. If `date` is omitted, Django uses today's UK date. Django fetches WINDFOR and FUELHH, matches observed wind values to forecast intervals, and returns `actualAverageMW`, `actualPeriods`, and `accuracy` (`mapePercent`, `maeMW`, `biasMW`, and `matchedPeriods`). If actual values have not arrived for forecast intervals yet, the affected metrics are `null` until matching observations are available.
 
 ### `POST /api/chat`
 
-JSON body bhejein:
+Send a JSON request body:
 
 ```json
-{ "question": "Kal ki windcast kya thi?" }
+{ "question": "What was yesterday's windcast?" }
 ```
 
-Next.js proxy Django `POST /api/v1/public/assistant/` ko sawaal bhejta hai. Response mein `answer`, `date`, `source`, aur `updatedAt` milte hain. Chatbot forecast API se data leta hai, isliye provider unavailable ho to woh fake result ke bajay error deta hai.
+The Next.js proxy forwards the question to Django `POST /api/v1/public/assistant/`. The answer is grounded in Elexon forecast data. If the backend or Elexon is unavailable, the API reports an error instead of making up forecast values.
 
-Elexon API public hai, API key ki zaroorat nahi. Source: [Elexon WINDFOR API docs](https://bmrs.elexon.co.uk/api-documentation/endpoint/forecast/generation/wind/latest). Django provider Elexon se data fetch karta hai; Next.js sirf Django backend ko proxy karta hai.
+Elexon endpoints are public and do not require an API key. See the [Elexon WINDFOR API documentation](https://bmrs.elexon.co.uk/api-documentation/endpoint/forecast/generation/wind/latest). Django retrieves data from Elexon; Next.js proxies browser requests to Django.
 
-## Data aur current limits
+## Data notes and limitations
 
-- Feed GB-wide wind generation forecast hai, local wind farm ya regional forecast nahi.
-- Elexon ka latest revised data past dates ke liye bhi mil sakta hai; app original as-published forecast history reconstruct nahi karta.
-- Actual generation, forecast confidence, MAE/RMSE/MAPE, buying requirement, aur reserve recommendation calculate karne ke liye abhi doosra data source/model configure nahi hai.
-- Login screen demo onboarding hai; accounts ya Google authentication wired up nahi hain.
-- Development mode mein stale HMR se bachne ke liye service worker unregister hota hai. Production PWA mein cached app shell offline khul sakta hai, lekin live forecast/chat ko internet chahiye; API responses service worker cache nahi karta.
+- These are GB-wide wind generation values, not local wind-farm or regional forecasts.
+- Historical dates use Elexon's latest revised forecast; the app does not reconstruct the as-published forecast history.
+- Accuracy metrics are computed only for intervals with both a forecast and an observed FUELHH wind value. Accuracy may be unavailable before actual values are published.
+- Elexon does not provide model confidence bounds. The dashboard does not invent confidence or reserve values.
+- The login screen is demo onboarding; account sign-in and Google authentication are not configured.
+- In development, the service worker is unregistered to avoid stale HMR files. In production, the PWA can open its cached app shell offline, but live forecast, actual, and chat requests need internet access. API responses are not cached by the service worker.
 
 ## Project files
 
 ```text
 app/
 ├── api/
-│   ├── chat/route.ts       # Forecast-grounded assistant endpoint
-│   └── windcast/route.ts   # Elexon WINDFOR proxy and summary
+│   ├── chat/route.ts          # Forecast-grounded assistant proxy
+│   ├── performance/route.ts   # Live actual and accuracy proxy
+│   └── windcast/route.ts      # Live WINDFOR forecast proxy
 ├── components/
-│   ├── Features.tsx        # Forecast dashboard and assistant UI
-│   ├── Login.tsx           # Start screen
-│   └── Welcome.tsx         # Welcome/onboarding screen
-├── globals.css             # Global styling
-├── layout.tsx              # Root layout and metadata
-├── manifest.ts             # PWA manifest
-└── page.tsx                # Login → Welcome → dashboard flow
+│   ├── Features.tsx           # Forecast dashboard and assistant UI
+│   ├── Login.tsx              # Start screen
+│   └── Welcome.tsx            # Welcome/onboarding screen
+├── globals.css                # Global styles
+├── layout.tsx                 # Root layout and metadata
+├── manifest.ts                # PWA manifest
+└── page.tsx                   # Login → Welcome → dashboard flow
 public/
 ├── logo.png
-└── sw.js                   # Versioned app-shell service worker
+└── sw.js                      # Versioned app-shell service worker
 ```
